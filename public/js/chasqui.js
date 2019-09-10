@@ -543,6 +543,28 @@ function mostrar_formulario_archivar(id_derivacion){
    }) ;
 }
 
+//Funcion para generar la ventana emergente del formulario juntar y derivar correspondencia
+function mostrar_formulario_juntar_y_derivar(id_derivacion){
+   var urlraiz=$("#url_raiz_proyecto").val();
+   $("#capa_modal").show();
+   $("#capa_formularios").show();
+   var screenTop = $(document).scrollTop();
+   $("#capa_formularios").css('top', screenTop);
+   $("#capa_formularios").html($("#cargador_empresa").html());
+   //Pasamos el id_derivacion para manterer el cite
+   var miurl=urlraiz+"/form_juntar_y derivar_correspondencia/"+id_derivacion;
+    $.ajax({
+    url: miurl
+    }).done( function(resul)
+    {
+     $("#capa_formularios").html(resul);
+
+    }).fail( function()
+   {
+    $("#capa_formularios").html('<span>...ATENCION Ha ocurrido un error, revise su conexión y vuelva a intentarlo...</span>');
+   }) ;
+
+}
 
 
 $(document).on("submit",".formentrada",function(e){

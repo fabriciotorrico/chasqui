@@ -31,6 +31,8 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('copias_recibidas', 'CorrespondenciasController@copias_recibidas');
     Route::get('form_derivar_correspondencia/{id_derivacion}', 'CorrespondenciasController@form_derivar_correspondencia');
     Route::post('derivar_correspondencia', 'CorrespondenciasController@derivar_correspondencia');
+    Route::get('form_juntar_y_derivar_correspondencia/{id_derivacion}', 'CorrespondenciasController@form_derivar_correspondencia');
+    Route::post('juntar_y_derivar_correspondencia', 'CorrespondenciasController@derivar_correspondencia');
     Route::get('form_archivar_correspondencia/{id_derivacion}', 'CorrespondenciasController@form_archivar_correspondencia');
     Route::post('archivar_correspondencia', 'CorrespondenciasController@archivar_correspondencia');
     Route::get('enviados', 'CorrespondenciasController@enviados');

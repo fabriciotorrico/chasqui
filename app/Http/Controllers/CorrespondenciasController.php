@@ -616,7 +616,231 @@ class CorrespondenciasController extends Controller
             ->with('accion', $accion);
   }
 
-  public function form_derivar_correspondencia($id_derivacion){
+    public function form_derivar_correspondencia($id_derivacion){
+      //echo "ID: ".$id_derivacion;
+      //Tomamos los datos de la persona logueada
+      $usuario_logueado =  $this->datos_persona_logueada();
+      foreach ($usuario_logueado as $usuario) {
+        $persona_origen = $usuario->nombres." ".$usuario->paterno." ".$usuario->materno;
+        $id_cargo_origen = $usuario->id_cargo;
+        $cargo_origen = $usuario->descripcion_del_cargo;
+        $sigla_origen = $usuario->sigla_del_area;
+        $id_nivel_jerarquico_origen = $usuario->id_nivel_jerarquico;
+        $id_area_origen = $usuario->id_area;
+        $unidad_origen = $usuario->unidad;
+        $id_direccion_origen = $usuario->id_direccion;
+        $id_entidad_origen = $usuario->id_entidad;
+        $id_servidor_publico_origen = $usuario->id_servidor_publico;
+      }
+
+      //Tomamos todos los posibles destinatarios segun regla general
+      $destinatarios = $this->get_destinatarios();
+
+      //Además del flujo normal, se tiene la tabla chasqui_flujos_especiales, donde se agregan flujos de derivacion especiales uno a uno, seleccionamos ese para el actual usuario
+      $destinatarios_especiales = \DB::table('chasqui_flujos_especiales')
+      ->join('cargos', 'cargos.id_cargo', '=', 'chasqui_flujos_especiales.id_cargo_destino')
+      ->join('areas', 'areas.id_area', '=', 'cargos.id_area')
+      ->join('servidores_publicos', 'servidores_publicos.id_cargo', '=', 'cargos.id_cargo')
+      ->join('personas', 'personas.id_persona', '=', 'servidores_publicos.id_persona')
+      ->join('users', 'users.id_persona', '=', 'personas.id_persona')
+      ->select('users.id as id_usuario', 'personas.id_persona', 'personas.nombres', 'personas.paterno','personas.materno', 'personas.titulo',
+              'cargos.descripcion as descripcion_del_cargo', 'areas.sigla as sigla_del_area')
+      ->where('chasqui_flujos_especiales.id_cargo_origen', $id_cargo_origen)
+      ->where('chasqui_flujos_especiales.activo', 1)
+      ->where('cargos.vigente', 1)
+      ->where('servidores_publicos.activo', 1)
+      ->where('users.activo', 1)
+      ->orderby('cargos.id_cargo')
+      ->get();
+
+      //Tomamos el cite de la id_derivacion recibida
+      $cite = \DB::table('chasqui_derivaciones')
+      ->where('id_derivacion', $id_derivacion)
+      ->value('cite');
+      //->get();
+
+      //$cite = $this->get_cite_comunicacion_interna();
+
+      //Tomamos la fecha actual
+      $date = new Carbon();
+      $hoy = Carbon::now();
+      $fecha = $hoy->format('Y-m-d');
+
+      //Tomamos las posibles instrucciones
+      $instrucciones = \DB::table('chasqui_instrucciones')
+      ->where('activo', 1)
+      ->select('*')
+      ->get();
+
+      //Establecemos que la accion a realizar sea derivar la correspondencia
+      $accion = "derivar_correspondencia";
+
+      //Devolvemos la vista con los parametros necesarios
+      return view("formularios_chasqui.form_nueva_correspondencia")
+              ->with("persona_origen", $persona_origen)
+              ->with('cargo_origen', $cargo_origen)
+              ->with('sigla_origen', $sigla_origen)
+              ->with('destinatarios', $destinatarios)
+              ->with('destinatarios_especiales', $destinatarios_especiales)
+              ->with('cite', $cite)
+              ->with('instrucciones', $instrucciones)
+              ->with('fecha', $fecha)
+              ->with('accion', $accion)
+              ->with('id_derivacion', $id_derivacion);
+    }
+
+    public function derivar_correspondencia(Request $request){
+      //Tomamos los valores del post
+      $id_derivacion_respondida = $request->id_derivacion;
+      $cite = $request->cite;
+      $id_usuario_destino = $request->id_usuario_destino;
+      $id_instruccion = $request->id_instruccion;
+      $referencia = $request->referencia;
+      $contenido = $request->contenido;
+      //$id_documento = $request->id_documento;
+      $id_documento = 0;
+      $nro_paginas_agregadas = $request->nro_paginas_agregadas;
+      $prioridad = $request->prioridad;
+      $switch_copia = $request->switch_copia; //Si esta en "on" es seleccionado
+      $id_usuarios_copia = $request->id_usuario_copia;
+
+      //Establecemos el campo plazo segun corresponda
+      if ($request->plazo > 0) {$plazo = $request->plazo;}
+      else {$plazo = 0;}
+
+      //Tomamos otros campos necesarios para el registro de la derivacion
+      //Tomamos los datos de la persona logueada
+      $usuario_logueado =  $this->datos_persona_logueada();
+      foreach ($usuario_logueado as $usuario) {
+        $id_persona_origen = $usuario->id_persona;
+        $id_cargo_origen = $usuario->id_cargo;
+        $id_area_origen = $usuario->id_area;
+      }
+
+      //Tomamos los datos del destinatario
+      $id_persona_destino = \DB::table('users')
+          ->where('users.id', $id_usuario_destino)
+          ->where('users.activo', 1)
+          ->value('users.id_persona');
+
+      $id_cargo_destino = \DB::table('users')
+          ->join('servidores_publicos', 'servidores_publicos.id_servidor_publico', '=', 'users.id_servidor_publico')
+          ->where('users.id', $id_usuario_destino)
+          ->where('users.activo', 1)
+          ->value('servidores_publicos.id_cargo');
+
+      //Tomamos la fecha y horactual actual y gestion
+      $date = new Carbon();
+      $hoy = Carbon::now();
+      $fecha_creacion = $hoy->format('Y-m-d H');
+      $gestion = $hoy->format('Y');
+
+      //Realizamos un nuevo registro
+      $derivacion =new Derivacion;
+      $derivacion->cite=$cite;
+      $derivacion->id_cargo_origen=$id_cargo_origen;
+      $derivacion->id_persona_origen=$id_persona_origen;
+      $derivacion->id_cargo_destino=$id_cargo_destino;
+      $derivacion->id_persona_destino=$id_persona_destino;
+      $derivacion->id_instruccion=$id_instruccion;
+      $derivacion->referencia=$referencia;
+      $derivacion->contenido=$contenido;
+      $derivacion->id_documento=$id_documento;
+      $derivacion->nro_paginas_agregadas=$nro_paginas_agregadas;
+      $derivacion->prioridad=$prioridad;
+      $derivacion->plazo=$plazo;
+      $derivacion->tipo="Original";
+      $derivacion->recibido=0;
+      $derivacion->fecha_recibido="NULL";
+      $derivacion->derivado=0;
+      $derivacion->fecha_derivado="NULL";
+      $derivacion->gestion=$gestion;
+      $derivacion->anulado=0;
+      $derivacion->save();
+
+      //Tomamos el id del registro realizado
+      $id_derivacion_creada = $derivacion->id;
+
+      //Verficamos si se debe enviar el documento como copia
+      if ($switch_copia == "on") {
+
+        //Agregamos la palabra COPIA a la referencia
+        $referencia_copia = $referencia." - COPIA";
+
+        //Para cada usuario como copia
+        for ($i=0;$i<count($id_usuarios_copia);$i++)
+        {
+          //Tomamos los datos de las personas a enviar como copia
+          $id_persona_destino_copia = \DB::table('users')
+              ->where('users.id', $id_usuarios_copia[$i])
+              ->where('users.activo', 1)
+              ->value('users.id_persona');
+
+          $id_cargo_destino_copia = \DB::table('users')
+              ->join('servidores_publicos', 'servidores_publicos.id_servidor_publico', '=', 'users.id_servidor_publico')
+              ->where('users.id', $id_usuarios_copia[$i])
+              ->where('users.activo', 1)
+              ->value('servidores_publicos.id_cargo');
+
+          //Realizamos el registro de las copias, solo si es diferente al destinatario original
+          if ($id_cargo_destino_copia != $id_usuario_destino && $id_persona_destino_copia != $id_persona_destino) {
+            \DB::table('chasqui_derivaciones')->insert([
+                ['cite' => $cite,
+                 'id_cargo_origen' => $id_cargo_origen,
+                 'id_persona_origen' => $id_persona_origen,
+                 'id_cargo_destino' => $id_cargo_destino_copia,
+                 'id_persona_destino' => $id_persona_destino_copia,
+                 'id_instruccion' => $id_instruccion,
+                 'referencia' => $referencia_copia,
+                 'contenido' => $contenido,
+                 'id_documento' => $id_documento,
+                 'nro_paginas_agregadas' => $nro_paginas_agregadas,
+                 'prioridad' => $prioridad,
+                 'plazo' => $plazo,
+                 'tipo' => 'Copia',
+                 'recibido' => 0,
+                 'fecha_recibido' => 'NULL',
+                 'derivado' => 0,
+                 'fecha_derivado' => 'NULL',
+                 'gestion' => $gestion,
+                 'anulado' => 0]
+            ]);
+          }
+        }
+      }
+
+      //Actualizamos el valor derivado de la correspondencia recibida
+      \DB::table('chasqui_derivaciones')
+          ->where('id_derivacion', $id_derivacion_respondida)
+          ->update(['derivado' => 1,
+                    'fecha_derivado' => $fecha_creacion]);
+
+      //Tomamos todos los campos para enviar a la vista bandeja de entrada
+      //Enviamos la variable folder para marcar en azul el folder en el que se encuentra
+      $folder = "bandeja_de_entrada";
+      //Tomamos la cantidad de correspondencia nueva (sin recepcionar)
+      $bandeja_nuevos_cantidad = $this->bandeja_nuevos_cantidad();
+      //Tomamos las derivaciones a mostrar
+      $derivaciones = $this->derivaciones_recibidas();
+      //Tomamos el plazo que se tiene para responder cada derivacion
+      $array_plazo = $this->plazo_restante_derivaciones();
+      //Establecemos el mensaje de exito a mostrar
+      $mensaje_exito = "La correspondencia fue derivada correctamente.";
+
+      //Establecemos las variables que definiran el mensaje de exito a mostrar y el id a imprimir en la funcion msj_exitoso_imprimir
+      $accion_exitosa = "hoja_ruta_interna_derivada";
+      $id_derivacion = $id_derivacion_creada;
+
+      //Codificamos los parametros a pasar con get
+      $accion_exitosa_codificado = base64_encode($accion_exitosa);
+      $id_derivacion_codificado = base64_encode($id_derivacion);
+
+      //return $this->vista_exitoso();
+      return redirect('msj_exitoso_imprimir/'.$accion_exitosa_codificado.'/'.$id_derivacion_codificado);
+    }
+
+
+  public function form_juntar_y_derivar_correspondencia($id_derivacion){
     //echo "ID: ".$id_derivacion;
     //Tomamos los datos de la persona logueada
     $usuario_logueado =  $this->datos_persona_logueada();
@@ -689,7 +913,7 @@ class CorrespondenciasController extends Controller
             ->with('id_derivacion', $id_derivacion);
   }
 
-  public function derivar_correspondencia(Request $request){
+  public function juntar_y_derivar_correspondencia(Request $request){
     //Tomamos los valores del post
     $id_derivacion_respondida = $request->id_derivacion;
     $cite = $request->cite;

@@ -88,10 +88,12 @@
           <input type="hidden" name="id_derivacion" value="{{ $derivacion->id_derivacion }}">
           <button type="submit" class="btn btn-default"><i class="fa fa-download"></i> Guardar copia </button>
           <a href="javascript:void(0);" onclick="mostrar_formulario_derivar({{ $derivacion->id_derivacion }});" class="btn btn-default"> <i class="fa fa-share"></i> Derivar</a>
+          <a href="javascript:void(0);" onclick="mostrar_formulario_juntar_y_derivar({{ $derivacion->id_derivacion }});" class="btn btn-default"> <i class="fa fa-code-fork"></i> Juntar y Derivar <i class="fa fa-share"></i></a>
         </form>
       @else
         <a href="javascript:void(0);" onclick="mostrar_formulario_archivar({{ $derivacion->id_derivacion }});" class="btn btn-default"> <i class="fa fa-download"></i> Archivar</a>
         <a href="javascript:void(0);" onclick="mostrar_formulario_derivar({{ $derivacion->id_derivacion }});" class="btn btn-default"> <i class="fa fa-share"></i> Derivar</a>
+        <a href="javascript:void(0);" onclick="mostrar_formulario_juntar_y_derivar({{ $derivacion->id_derivacion }});" class="btn btn-default"> <i class="fa fa-code-fork"></i> Juntar y Derivar <i class="fa fa-share"></i></a>
       <!--button type="button" class="btn btn-default"><i class="fa fa-share"></i> Derivar </button>
 
       <form class="form" action="{{ url('leer_correspondencia') }}" method="post">
